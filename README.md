@@ -1,3 +1,6 @@
+### This repository contains shell scripts importing geonames.org data dumps into PostgreSQL database.
+It has been forked from this <a href="http://codigofuerte.github.com/GeoNames-MySQL-DataImport" target="_blank">reference site</a> and converted to PostgreSQL compliant DDL. The rest of readme file is from the original repository,
+
 ### V 2.0 Shell Script for importing geonames.org data dumps into a MySQL database.
 
 Usage: geonames_importer.sh -a "action"
