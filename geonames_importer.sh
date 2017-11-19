@@ -161,31 +161,29 @@ esac
 case "$action" in
     create-db)
         echo "Creating database $dbname..."
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword -Bse "DROP DATABASE IF EXISTS $dbname;"
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword -Bse "CREATE DATABASE $dbname DEFAULT CHARACTER SET utf8mb4;" 
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword -Bse "USE $dbname;" 
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword $dbname < "$working_dir/geonames_db_struct.sql"
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -c "DROP DATABASE IF EXISTS $dbname;"
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -c "CREATE DATABASE $dbname ENCODING 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';" 
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_db_struct.sql"
     ;;
         
     create-tables)
         echo "Creating tables for database $dbname..."
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword -Bse "USE $dbname;" 
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword $dbname < "$working_dir/geonames_db_struct.sql"
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_db_struct.sql"
     ;;
     
     import-dumps)
         echo "Importing geonames dumps into database $dbname"
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword --local-infile=1 $dbname < "$working_dir/geonames_import_data.sql"
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_import_data.sql"
     ;;    
     
     drop-db)
         echo "Dropping $dbname database"
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword -Bse "DROP DATABASE IF EXISTS $dbname;"
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -c "DROP DATABASE IF EXISTS $dbname;"
     ;;
         
     truncate-db)
         echo "Truncating \"geonames\" database"
-        mysql -h $dbhost -P $dbport -u $dbusername -p$dbpassword $dbname < "$working_dir/geonames_truncate_db.sql"
+        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_truncate_db.sql"
     ;;
 esac
 
