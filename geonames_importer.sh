@@ -1,4 +1,5 @@
-#!/bin/bash
+#! /bin/bash
+
 
 working_dir=$( cd "$( dirname "$0" )" && pwd )
 data_dir="$working_dir/data"
@@ -13,10 +14,15 @@ geonames_postal_code_repo="http://download.geonames.org/export/zip/"
 
 # Default values for database variables.
 dbhost="localhost"
-dbport=3306
+dbport=5432
 dbname="geonames"
-dbusername="root"
-dbpassword="root"
+dbusername="postgres"
+#Encode special characters with percent encoding e.g. @ = %40
+dbpassword="password"
+
+tmp_connection_uri="postgres://$dbusername:$dbpassword@$dbhost:$dbport/postgres"
+connection_uri="postgres://$dbusername:$dbpassword@$dbhost:$dbport/$dbname"
+
 
 # Default value for download folder
 download_folder="$working_dir/download"
@@ -24,7 +30,8 @@ download_folder="$working_dir/download"
 # Default general dumps to download
 dumps="allCountries.zip alternateNames.zip hierarchy.zip admin1CodesASCII.txt admin2Codes.txt featureCodes_en.txt timeZones.txt countryInfo.txt"
 # By default all postal codes ... You can specify a set of the files located at http://download.geonames.org/export/zip/
-postal_codes="allCountries.zip"
+#postal_codes="allCountries.zip"
+postal_codes="PL.zip DE.zip"
 
 #
 # The folders configuration used by this application is as follows:
@@ -68,6 +75,7 @@ dump_db_params() {
     echo "DB Host: " $dbhost
     echo "DB Port: " $dbport
     echo "DB Name: " $dbname
+    echo "Default connection URI: " $connection_uri
 }
 
 if [ $# -lt 1 ]; then
@@ -79,6 +87,9 @@ logo
 echo "Current working folder: $working_dir"
 echo "Current data folder: $data_dir"
 echo "Default download folder: $download_folder"
+# echo "PostgreSQL connection URI: $connection_uri"
+# echo "PostgreSQL connection URI for database creation: $tmp_connection_uri"
+
 
 # Deals with operation mode 2 (Database issues...)
 # Parses command line parameters.
@@ -127,7 +138,7 @@ case $action in
             wget -c -P "$download_folder" "$geonames_general_data_repo/$dump"
             if [ ${dump: -4} == ".zip" ]; then
                 echo "Unzipping $dump into $data_dir"
-                unzip "$download_folder/$dump" -d $data_dir
+                unzip -o "$download_folder/$dump" -d $data_dir
             else
                 if [ ${dump: -4} == ".txt" ]; then
                     mv "$download_folder/$dump" $data_dir
@@ -150,10 +161,24 @@ case $action in
             wget -c -P "$download_folder/zip_codes" "$geonames_postal_code_repo/$postal_code_file"
             if [ ${postal_codes: -4} == ".zip" ]; then
                 echo "Unzipping Postal Code file $postal_code_file into $download_folder/zip_codes"
-                unzip "$download_folder/zip_codes/$postal_code_file" -d $zip_codes_dir
+                unzip -o "$download_folder/zip_codes/$postal_code_file" -d $zip_codes_dir
             fi 
         done
         echo "DATA DOWNLOAD FINISHED !!"
+        
+        # File post-processing        
+        echo "Starting file post-processing..."
+        if [ -f $data_dir/countryInfo.txt ]; then
+			
+			sed -i[backup] '1,51d' "$data_dir/countryInfo.txt"			
+		fi
+		if [ -f $data_dir/timeZones.txt ]; then
+			
+			sed -i[backup] '1d' "$data_dir/countryInfo.txt"
+		fi
+		echo "File post-processing done."
+        
+        
         exit 0
     ;;
 esac
@@ -161,33 +186,35 @@ esac
 case "$action" in
     create-db)
         echo "Creating database $dbname..."
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -c "DROP DATABASE IF EXISTS $dbname;"
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -c "CREATE DATABASE $dbname ENCODING 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';" 
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_db_struct.sql"
+        psql $tmp_connection_uri -c "DROP DATABASE IF EXISTS $dbname;"
+        psql $tmp_connection_uri -c "CREATE DATABASE $dbname ENCODING 'UTF8' LC_COLLATE = 'en_US.UTF-8' LC_CTYPE = 'en_US.UTF-8';" 
+        psql $connection_uri -c "CREATE SCHEMA IF NOT EXISTS geonames;"
+        psql $connection_uri -f "$working_dir/geonames_db_struct.sql"
     ;;
         
     create-tables)
         echo "Creating tables for database $dbname..."
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_db_struct.sql"
+        psql $connection_uri -c "CREATE SCHEMA IF NOT EXISTS geonames;"
+        psql $connection_uri -f "$working_dir/geonames_db_struct.sql"
     ;;
     
     import-dumps)
         echo "Importing geonames dumps into database $dbname"
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_import_data.sql"
+        psql $connection_uri -f "$working_dir/geonames_import_data.sql"
     ;;    
     
     drop-db)
         echo "Dropping $dbname database"
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -c "DROP DATABASE IF EXISTS $dbname;"
+        psql $tmp_connection_uri -c "DROP DATABASE IF EXISTS $dbname;"
     ;;
         
     truncate-db)
         echo "Truncating \"geonames\" database"
-        psql -h $dbhost -p $dbport -U $dbusername -d $dbname -f "$working_dir/geonames_truncate_db.sql"
+        psql $connection_uri -f "$working_dir/geonames_truncate_db.sql"
     ;;
 esac
 
-if [ $? == 0 ]; then 
+if [ $? -eq 0 ]; then 
 	echo "[OK]"
 else
 	echo "[FAILED]"
